@@ -1,0 +1,286 @@
+---
+title: "Model Selection Exercise"
+author: "Sarah K. Krueger"
+data: "9/30/2021"
+output: html_document
+---
+```{r setup2, include=FALSE}
+library(ggplot2)
+library(patchwork)
+library(MuMIn)
+library(dplyr)
+library(lme4)
+library(lmerTest)
+library(ggfortify)
+library(MuMIn)
+library(performance)
+library(GGally)
+
+```
+
+<body style="background-color:pink;">
+
+![](pics/ants.jpg)
+
+The goal of this first study was to investigate mound site preference of leaf cutter ants (*Atta cephalotes*) in Belize. A total of 10 mounds were surveyed and 10 randomized control sites were selected that did not have any mounds. The data includes one response variable: presence, and four predictor variables: distance to forest edge (m), sun exposure (%), elevation (ft), and soil pH. 
+
+```{r}
+ants <- read.csv("ants.csv")
+```
+
+Firstly, I checked for co-linearity among the four predictor variables. 
+
+```{r fig.height=8, fig.width=8, message = FALSE}
+pairs(ants[,2:5], lower.panel = NULL)
+```
+```{r, message = FALSE}
+ggpairs(ants, columns = 2:5) + theme_bw()
+```
+
+Sun exposure (%) and distance to edge (m) are highly correlated but for the purposes of this assignment, I chose to ignore it and run my candidate models next. (Note: Since the response variable was binary, I had to run a generalized linear model)
+
+```{r, message=FALSE, warning=FALSE}
+mod1 <- glm(presence ~ Elevation + distance.to.edge + sun.exposure + soil.pH , family = binomial(link = "logit"), data = ants)
+mod2 <- glm(presence ~ soil.pH + distance.to.edge + sun.exposure, family = binomial(link = "logit"), data = ants)
+mod3 <- glm(presence ~ Elevation + distance.to.edge, family = binomial(link = "logit"), data = ants)
+mod4 <- glm(presence ~ sun.exposure + soil.pH, family = binomial(link = "logit"), data = ants)
+```
+
+I then used the `model.sel` function to conduct model selection. 
+
+```{r}
+out.put <- model.sel(mod1,mod2,mod3,mod4)
+out.put
+```
+
+Looks like model 4 containing an intercept (Int), soil pH, and sun exposure (sun.exp) is best model with a weight of 0.717. It is 0.717/0.234 = 3.06 times more likely to be the best explanation (hypothesis) for variation in mound presence. 
+
+I then used the `subset` function to select the models that meet the criteria of having a delta value <5.
+
+```{r create subset of all models}
+subset(out.put, delta <5)
+```
+
+To re-normalize the weights, I used Royall's 1/8 rule for strength of evidence. 
+
+```{r Royall}
+subset(out.put, 1/8 < weight/max(out.put$weight))
+```
+The weights did not change, so I tried selecting models with 95% cumulative weight.
+
+```{r}
+subset(out.put, cumsum(out.put$weight) <= .95)
+```
+
+We can see that this function has narrowed the model selection down to one. 
+
+I then cleaned up the data below. 
+
+```{r}
+sel.table<-as.data.frame(out.put)[6:10]
+sel.table[,2:3]<- round(sel.table[,2:3],2)
+sel.table[,4:5]<- round(sel.table[,4:5],3)
+names(sel.table)[2] = "K"
+sel.table
+```
+
+I then ran model selection sorted by BIC, CAICF, and AIC.
+
+```{r}
+model.sel(mod1,mod2,mod3,mod4, rank = BIC)
+```
+```{r}
+model.sel(mod1,mod2,mod3,mod4, rank = CAICF) 
+```
+```{r compare models with AIC}
+AIC(mod1,mod2, mod3, mod4)
+```
+
+Next, I ran the importance weights for individual predictor variables. 
+
+```{r Importance weights for individual predictor variables}
+importance(out.put)
+```
+
+Looking at the output above, there is plenty of evidence for *soil pH* and *sun exposure* (weights are one), but much less for *elevation*. 
+
+
+I then used the function `model.avg` to model average using all candidate models. 
+
+```{r Model Averaging}
+MA.ests<-model.avg(out.put, revised.var = TRUE)
+MA.ests
+```
+
+I plotted a graph with the "best" model. 
+
+```{r make a figure using best-fit model}
+p1 <- ggplot(ants, aes(sun.exposure, presence, color = soil.pH)) +
+  geom_point(size = 3) +
+  xlab("Sun Exposure (%)") +
+  ylab("Mound Presence") +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank())
+
+p1
+```
+
+Lastly, I plotted the competitive variables just for comparison. 
+
+```{r}
+p2 <- ggplot(ants, aes(distance.to.edge, presence,)) +
+  geom_point(size = 3, color = "red") +
+  xlab("Distance to Forest Edge (m)") +
+  ylab("Mound Presence") +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank())
+
+p3 <- ggplot(ants, aes(Elevation, presence,)) +
+  geom_point(size = 3, color = "red") +
+  xlab("Elevation (ft)") +
+  ylab("Mound Presence") +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank())
+
+p2 / p3 
+```
+
+![](pics/bats.JPG)
+
+The goal of this second study was to investigate what influences the over-wintering survival of tri-colored bats in North America. A total of 12 bats were surveyed (6 that survived the winter and 6 that did not). The data includes one response variable: survival, and four predictor variables: winter duration (days), sex, mass (g), and elevation. 
+
+```{r}
+bats <- read.csv("bats.csv")
+bats$survival <- as.numeric(bats$survival)
+bats$winter.duration <- as.numeric(bats$winter.duration)
+bats$mass <- as.numeric(bats$mass)
+bats$sex <- as.numeric(bats$sex)
+bats$elevation <- as.numeric(bats$elevation)
+
+```
+
+Firstly, I checked for co-linearity among the four predictor variables. 
+
+```{r fig.height=8, fig.width=8}
+pairs(bats[,2:5], lower.panel = NULL) 
+```
+
+```{r, message = FALSE}
+ggpairs(bats, columns = 2:5) + theme_bw()
+```
+
+Elevation and winter are highly correlated as expected because higher elevations generally have more severe and longer winters. but for the purposes of this assignment, I chose to ignore it and run my candidate models next. (Note: Since this response variable was also binary, I had to run a generalized linear model)
+
+```{r message=FALSE, warning=FALSE}
+mod5 <- glm(survival ~ winter.duration + mass + elevation, family = binomial(link = "logit"), data = bats)
+mod6 <- glm(survival ~ sex + winter.duration, family = binomial(link = "logit"), data = bats)
+mod7 <- glm(survival ~ winter.duration + elevation, family = binomial(link = "logit"), data = bats)
+mod8 <- glm(survival ~ winter.duration, family = binomial(link = "logit"), data = bats)
+```
+
+I then used the `model.sel` function to conduct model selection. 
+
+```{r}
+out.put2 <- model.sel(mod5, mod6, mod7, mod8)
+out.put2
+```
+
+Looks like model 8 containing an intercept (Int) and winter duration (wnt.drt) is best with a weight of 0.749. It is 0.749/0.120 = 6.24 times more likely to be the best explanation (hypothesis) for survival. 
+
+I then used the `subset` function to select the models that meet the criteria of having a delta value <5.
+
+```{r}
+subset(out.put2, delta <5)
+```
+
+To re-normalize the weights, I used Royall's 1/8 rule for strength of evidence. 
+
+```{r}
+subset(out.put2, 1/8 < weight/max(out.put$weight))
+```
+
+The weights did not change, so I tried selecting models with 95% cumulative weight.
+
+```{r}
+subset(out.put2, cumsum(out.put$weight) <= .95)
+```
+
+We can see that this function has narrowed the models down to one. 
+
+I then cleaned up the data below. 
+
+```{r}
+sel.table2 <-as.data.frame(out.put2)[6:10]
+sel.table2[,2:3]<- round(sel.table2[,2:3],2)
+sel.table2[,4:5]<- round(sel.table2[,4:5],3)
+names(sel.table2)[2] = "K"
+sel.table2
+```
+
+I then ran model selection sorted by BIC, CAICF, and AIC.
+
+```{r}
+model.sel(mod5, mod6, mod7, mod8, rank = BIC)
+```
+```{r}
+model.sel(mod5, mod6, mod7, mod8, rank = CAICF) 
+```
+
+```{r}
+AIC(mod5, mod6, mod7, mod8)
+```
+
+Next, I ran the importance weights for individual predictor variables. 
+
+```{r}
+importance(out.put2)
+```
+
+Looking at the output above, there is plenty of evidence for *winter duration* (weight is one), but much less for *elevation*, *sex*, and *mass*. 
+
+
+I then used the function `model.avg` to model average using all candidate models. 
+
+```{r}
+MA.ests2 <- model.avg(out.put2, revised.var = TRUE)
+MA.ests2
+```
+
+I then plotted the "best" model. 
+
+```{r}
+p4 <- ggplot(bats, aes(winter.duration, survival)) + 
+  geom_point(color = "red", size = 4) +
+  xlab("Winter Duration (days)") +
+  ylab("Winter Survival") +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank())
+
+p4
+```
+
+Lastly, I plotted the competitive variables just for comparison. 
+
+```{r}
+p5 <- ggplot(bats, aes(mass, survival,)) +
+  geom_point(size = 3, color = "red") +
+  xlab("Mass (g)") +
+  ylab("Winter Surival") +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank())
+
+p6 <- ggplot(bats, aes(elevation, survival,)) +
+  geom_point(size = 3, color = "red") +
+  xlab("Elevation (ft)") +
+  ylab("Winter Survival") +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank())
+
+p5 / p6 
+```
