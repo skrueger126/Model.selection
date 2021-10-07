@@ -380,7 +380,7 @@ out.put</code></pre>
 ## mod1 21.4  5.46  0.047
 ## mod3 27.6 11.70  0.002
 ## Models ranked by AICc(x)</code></pre>
-<p>Looks like model 4 containing an intercept (Int), soil pH, and sun exposure (sun.exp) is best model with a weight of 0.932. It is 0.932/0.061 = 3.06 times more likely to be the best explanation (hypothesis) for variation in mound presence.</p>
+<p>Looks like model 4 containing an intercept (Int), soil pH, and sun exposure (sun.exp) is best model with a weight of 0.717. It is 0.717/0.234 = 3.06 times more likely to be the best explanation (hypothesis) for variation in mound presence.</p>
 <p>I then used the <code>subset</code> function to select the models that meet the criteria of having a delta value &lt;5.</p>
 <pre class="r"><code>subset(out.put, delta &lt;5)</code></pre>
 <pre><code>## Model selection table 
